@@ -119,11 +119,27 @@ def main() -> int:
         if shutil.which("mkfs.vfat"):
             subprocess.run(["mkfs.vfat", "-F", "32", "-n", "PAYLOAD", "-C", str(fat), str(args.fat * 1024)],
                            check=True, capture_output=True)
-        else:
+        elif shutil.which("mformat"):
             with fat.open("wb") as image:
                 image.truncate(args.fat * MIB)
             subprocess.run(["mformat", "-i", str(fat), "-F", "-v", "PAYLOAD", "::"],
                            check=True, capture_output=True)
+        else:
+            from pyfatfs.PyFat import PyFat
+
+            with fat.open("wb") as image:
+                image.truncate(args.fat * MIB)
+
+            formatter = PyFat()
+            try:
+                formatter.mkfs(
+                    str(fat),
+                    fat_type=PyFat.FAT_TYPE_FAT32,
+                    size=args.fat * MIB,
+                    label="PAYLOAD",
+                )
+            finally:
+                formatter.close()
         if shutil.which("mcopy") and shutil.which("mmd"):
             populate_mtools(fat, args.tree)
         else:
