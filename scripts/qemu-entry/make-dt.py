@@ -28,6 +28,7 @@ parser.add_argument('--armvirt', action='store_true', help='Describe actual QEMU
 parser.add_argument('--platform-compatible', choices=['linux,dummy-virt', 'unmatched-test-platform', 'xiaomi,sheng'], default='linux,dummy-virt')
 parser.add_argument('--smp', type=int, default=1, help='Number of QEMU CPUs; Affinity0 numbers them, PSCI conduit is hvc (virt without EL2)')
 parser.add_argument('--armcpu', action='store_true', help='Add the real QEMU GICv3 distributor/redistributor DT resources')
+parser.add_argument('--no-ufs-test-nodes', action='store_true', help='Omit synthetic SM8550 UFS test nodes for a pure QEMU virt ADT')
 parser.add_argument('--data-ramdisk', action='store_true', help='Provide a writable scratch RAMDisk sidecar while keeping actual disk root matching')
 parser.add_argument('--ramdisk', action='store_true', help='Provide an owned memory-disk binding placeholder for the loader')
 parser.add_argument('--nvram-proxy', action='store_true', help='Initialize real IODTNVRAM from an empty volatile CHRP bank; no persistence controller')
@@ -130,7 +131,7 @@ tree = node('device-tree', [('model', b'qemu-entry-fixture\0'),
                           ('reg', struct.pack('<2Q', 0x03ff0000, 0x3000))]),
            node('ufsphy', [('compatible', b'qcom,sm8550-qmp-ufs-phy\0'),
                            ('reg', struct.pack('<2Q', 0x03fe0000, 0x2000))])]
-         if args.armvirt else []) + virtio_nodes)])
+         if args.armvirt and not args.no_ufs_test_nodes else []) + virtio_nodes)])
 output = args.output
 output.parent.mkdir(parents=True, exist_ok=True)
 output.write_bytes(tree)
