@@ -1,0 +1,41 @@
+--- a/osfmk/prng/prng_random.c
++++ b/osfmk/prng/prng_random.c
+@@ -430,6 +430,14 @@
+ extern struct mach_header_64 _mh_execute_header;
+ extern kern_return_t corecrypto_kext_start(kmod_info_t *, void *);
+ SECURITY_READ_ONLY_LATE(kern_return_t) source_corecrypto14_status = KERN_FAILURE;
++#if XNU_PUBLIC_CRYPTO_FIXTURE
++#include <libkern/crypto/register_crypto.h>
++extern int unixnu_public_crypto_fixture_run(int);
++extern void unixnu_public_crypto_fixture_checkpoint(void);
++extern crypto_functions_t g_crypto_funcs;
++uint64_t unixnu_public_crypto_owner_before[4];
++uint64_t unixnu_public_crypto_owner_after[4];
++#endif
+ 
+ static void
+ source_corecrypto14_bootstrap(void)
+@@ -449,6 +457,23 @@
+ 	if (source_corecrypto14_status != KERN_SUCCESS) {
+ 		panic("source corecrypto initialization failed: %d", source_corecrypto14_status);
+ 	}
++#if XNU_PUBLIC_CRYPTO_FIXTURE
++    int bad_expected = 0;
++    PE_parse_boot_argn("unixnu_crypto_fixture_bad_expected", &bad_expected, sizeof(bad_expected));
++    unixnu_public_crypto_owner_before[0] = (uintptr_t)g_crypto_funcs;
++    unixnu_public_crypto_owner_before[1] = (uintptr_t)prng_ctx;
++    unixnu_public_crypto_owner_before[2] = prng_ready;
++    unixnu_public_crypto_owner_before[3] = source_corecrypto14_status;
++    int fixture_failures = unixnu_public_crypto_fixture_run(bad_expected != 0);
++    unixnu_public_crypto_owner_after[0] = (uintptr_t)g_crypto_funcs;
++    unixnu_public_crypto_owner_after[1] = (uintptr_t)prng_ctx;
++    unixnu_public_crypto_owner_after[2] = prng_ready;
++    unixnu_public_crypto_owner_after[3] = source_corecrypto14_status;
++    if (fixture_failures != 0) {
++        panic("public crypto fixture failed: %d", fixture_failures);
++    }
++    unixnu_public_crypto_fixture_checkpoint();
++#endif
+ }
+ STARTUP(EARLY_BOOT, STARTUP_RANK_FIRST, source_corecrypto14_bootstrap);
+ #endif

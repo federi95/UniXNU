@@ -588,11 +588,39 @@ fi
 if [ "${XNU_SOURCE_CORECRYPTO14:-0}" = 1 ]; then
   EXTRA_CFLAGS="$EXTRA_CFLAGS -DXNU_SOURCE_CORECRYPTO14=1"
 fi
+PUBLIC_CRYPTO_FIXTURE=${XNU_PUBLIC_CRYPTO_FIXTURE:-0}
+if [ "$PUBLIC_CRYPTO_FIXTURE" != 0 ] && [ "$PUBLIC_CRYPTO_FIXTURE" != 1 ]; then
+  echo 'XNU_PUBLIC_CRYPTO_FIXTURE must be 0 or 1' >&2; exit 1
+fi
+if [ "$PUBLIC_CRYPTO_FIXTURE" = 1 ]; then
+  if [ "${XNU_SOURCE_CORECRYPTO14:-0}" != 1 ] || [ "$CRYPTO_BOOTSTRAP_MODE" != source ] || [ "${XNU_ARMVIRT_PLATFORM:-0}" != 1 ] || [ "$BOOTSTRAP" != 0 ]; then
+    echo 'Public crypto fixture requires a complete source-owner ArmVirt build' >&2; exit 1
+  fi
+  python3 scripts/build-public-crypto-fixture.py
+  EXTRA_MAKE_ARGS+=("prng_random.o_CFLAGS_ADD=-DXNU_PUBLIC_CRYPTO_FIXTURE=1")
+fi
+python3 - "$PUBLIC_CRYPTO_FIXTURE" <<'PY_MODE'
+from pathlib import Path
+import sys
+folder = Path('build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837')
+stamp = folder / '.public-crypto-fixture-mode'
+mode = sys.argv[1]
+if not stamp.exists() or stamp.read_text() != mode:
+    (folder / 'osfmk/DEVELOPMENT/prng_random.o').unlink(missing_ok=True)
+    (folder / 'mach.development.bcm2837.unstripped').unlink(missing_ok=True)
+    folder.mkdir(parents=True, exist_ok=True)
+    stamp.write_text(mode)
+PY_MODE
 if [ "${XNU_SOURCE_CORECRYPTO14:-0}" = 1 ] && [ "$BOOTSTRAP" = 0 ]; then
   CRYPTO_ARCHIVE=$ROOT/build/corecrypto-2023/libcorecrypto_kernel_noasm-namespaced.a
   test -f "$CRYPTO_ARCHIVE"
   KERNEL_EXTRA_ARCHIVES="-L$KERNEL_SDKROOT/usr/local/lib/kernel -lfirehose_kernel $CRYPTO_ARCHIVE"
   KERNEL_ARCHIVE_DEPENDENCIES=$CRYPTO_ARCHIVE
+  if [ "$PUBLIC_CRYPTO_FIXTURE" = 1 ]; then
+    PUBLIC_FIXTURE_ARCHIVE=$ROOT/build/public-crypto-fixture/libPublicCryptoFixture.a
+    KERNEL_EXTRA_ARCHIVES="$KERNEL_EXTRA_ARCHIVES -Wl,-force_load,$PUBLIC_FIXTURE_ARCHIVE"
+    KERNEL_ARCHIVE_DEPENDENCIES="$KERNEL_ARCHIVE_DEPENDENCIES $PUBLIC_FIXTURE_ARCHIVE"
+  fi
   if [ "$ADRENO_FIRMWARE_PROBE" = 1 ]; then
     ADRENO_PROBE_ARCHIVE=$ROOT/build/adreno-firmware-probe/libAdrenoFirmwareProbe.a
     test -f "$ADRENO_PROBE_ARCHIVE"

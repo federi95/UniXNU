@@ -129,3 +129,14 @@ python3 scripts/qemu-entry/gdb-stop.py --help
 - [bring-up 顺序](/zh/porting/bring-up)
 - [4 KiB 页表](/zh/xnu/four-k-page-tables)
 - [故障排查](/zh/reference/troubleshooting)
+
+## 公开源码加密测试
+
+`XNU_PUBLIC_CRYPTO_FIXTURE=1` 仅用于普通 ARM64/iOS 17 ArmVirt 源码内核诊断。
+在现有源码提供者启动补丁之后选择
+`profiles/arch/arm64/patches/xnu/source-public-crypto-fixture.patch`。
+测试在完整默认 POST 成功后执行，保留原有注册检查和加密/RNG 所有者。
+导出有限计数器以及测试前后的所有者指针；执行 340 个摘要测试（85 个通过
+现有内核入口）和 120 个 DER 测试。`unixnu_crypto_fixture_bad_expected=1`
+故意改变一个预期摘要，记录一次失败后必须 panic。不会执行原始固件组件、
+读取密钥或熵状态，也不代表操作系统或物理驱动兼容性验证。

@@ -129,3 +129,16 @@ The helper stops QEMU at a symbol and records registers, memory and the last che
 - [Bring-up order](/porting/bring-up)
 - [Four-kilobyte pages](/xnu/four-k-page-tables)
 - [Troubleshooting](/reference/troubleshooting)
+
+## Public source crypto fixture
+
+`XNU_PUBLIC_CRYPTO_FIXTURE=1` is an opt-in ordinary ARM64/iOS 17 ArmVirt
+source-owner diagnostic. Select `profiles/arch/arm64/patches/xnu/source-public-crypto-fixture.patch`
+after the existing source-provider bootstrap patch. The build links the fixture
+archive and recompiles only the bootstrap caller with its diagnostic define.
+The fixture runs after successful complete default POST, preserves registration
+and exports bounded counters plus owner pointers before/after. It executes
+340 deterministic digest cases (85 via the existing kernel entry) and 120 DER
+cases. `unixnu_crypto_fixture_bad_expected=1` deliberately changes one expected
+digest and must panic after recording one failure. No original component, keys
+or entropy state is read, and no provider/OS/hardware compatibility is implied.
