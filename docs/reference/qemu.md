@@ -161,3 +161,26 @@ the existing arm-io range. It requires `--armvirt`. Default fixtures omit it;
 TCG and HVF keep distinct timebases. A source-built PID 1 must align the initial
 exec stack before calling C; the raw exec stack can be only 8-byte aligned.
 No phone addresses, firmware or Apple device identity are used.
+
+
+## Isolated public GUI scanout
+
+The additional `XNU_OPEN_SOURCE_GUI=1` mode requires `XNU_OPEN_SOURCE_DEMO=1`.
+Its separate `source-open-gui-scanout.patch` is not in the default patch list.
+It provides `kern.open_darwin_fb` only in this public ArmVirt profile: root
+PID 1 and explicit `open-gui=1` are required. Geometry comes from
+`PE_current_console`, not a board constant. Only unrotated 32-bit GOP modes
+up to 2048x1536, an aligned stride no larger than 8192 and an exact full-frame
+write are admitted. The mapper declaration matches the pinned XNU header;
+no user-supplied physical address or direct userspace MMIO mapping is accepted.
+The 16-byte query returns version, width, height and byte stride. Writes copy
+pixels from the caller to the bounded scanout and retain the existing source
+crypto/integrity policy. This is an experimental public-demo API, not the
+MobileFramebuffer/IOSurface ABI or an Apple WindowServer/SpringBoard result.
+
+The parent q5q workspace supplies an owned static GUI process and a local
+viewer: QMP transports actual ramfb pixels, and click/key events reach the
+guest over serial. HVF and TCG prototypes render a home view, notes and a
+working calculator; an actual short-frame write returns EINVAL. This does
+not validate USB/HID, a GPU or any physical phone driver. Existing native
+GopFramebuffer/IOSurface integration remains a separate component path.

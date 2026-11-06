@@ -293,6 +293,26 @@ if not stamp.exists() or stamp.read_text() != mode:
 PY_DEMO_MODE
 EXTRA_MAKE_ARGS+=("ubc_subr.o_CFLAGS_ADD=-DXNU_NATIVE_CS_HASH_CACHE=$CS_HASH_CACHE_MODE -DXNU_OPEN_SOURCE_DEMO=$OPEN_SOURCE_DEMO")
 EXTRA_MAKE_ARGS+=("kern_cs.o_CFLAGS_ADD=-DXNU_OPEN_SOURCE_DEMO=$OPEN_SOURCE_DEMO")
+OPEN_SOURCE_GUI=${XNU_OPEN_SOURCE_GUI:-0}
+if [ "$OPEN_SOURCE_GUI" != 0 ] && [ "$OPEN_SOURCE_GUI" != 1 ]; then
+  echo 'XNU_OPEN_SOURCE_GUI must be 0 or 1' >&2; exit 1
+fi
+if [ "$OPEN_SOURCE_GUI" = 1 ] && [ "$OPEN_SOURCE_DEMO" != 1 ]; then
+  echo 'Public GUI requires the separate open source demo profile' >&2; exit 1
+fi
+python3 - "$OPEN_SOURCE_GUI" <<'PY_GUI_MODE'
+from pathlib import Path
+import sys
+root = Path('build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837')
+stamp = root / '.open-source-gui-mode'
+mode = sys.argv[1]
+if not stamp.exists() or stamp.read_text() != mode:
+    for name in ('bsd/DEVELOPMENT/kern_sysctl.o', 'mach.development.bcm2837.unstripped'):
+        (root / name).unlink(missing_ok=True)
+    root.mkdir(parents=True, exist_ok=True)
+    stamp.write_text(mode)
+PY_GUI_MODE
+EXTRA_MAKE_ARGS+=("kern_sysctl.o_CFLAGS_ADD=-DXNU_OPEN_SOURCE_GUI=$OPEN_SOURCE_GUI")
 EXTRA_CFLAGS=${XNU_EXTRA_CFLAGS:--Wno-reserved-identifier -Wno-pre-c11-compat -Wno-missing-designated-field-initializers -Wno-suggest-override -Wno-unnecessary-virtual-specifier -Wno-suggest-destructor-override -Wno-ms-bitfield-padding}
 OWNER_ROOT_PROBE=${XNU_VERIFIED_ROOT_PROBE:-0}
 if [ "$OWNER_ROOT_PROBE" != 0 ] && [ "$OWNER_ROOT_PROBE" != 1 ]; then

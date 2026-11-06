@@ -153,3 +153,15 @@ python3 scripts/qemu-entry/gdb-stop.py --help
 此配置复用现有 PL011 后端。`--pl011-console` 仅适用于 `--armvirt`，通过 arm-io
 范围描述 QEMU UART0（0x09000000/0x1000）；默认 ADT 不变，TCG/HVF 时基仍分开。
 静态 PID 1 在进入 C 前必须将 exec 初始栈对齐到 16 字节。没有使用手机硬件地址或固件。
+
+
+## 隔离的公开源码 GUI 扫描输出
+
+`XNU_OPEN_SOURCE_GUI=1` 必须同时启用 `XNU_OPEN_SOURCE_DEMO=1`。
+独立补丁 `source-open-gui-scanout.patch` 不在默认补丁列表中。
+`kern.open_darwin_fb` 仅允许 root PID 1 且要求 `open-gui=1`；从
+`PE_current_console` 获取真实 GOP 几何信息，拒绝旋转、非 32 位格式、
+超过 2048x1536 的尺寸、无效步长和非完整帧写入。用户不能提供物理地址。
+父仓库的静态 GUI 进程在客体中绘制画面，本地主机仅通过 QMP 显示真实
+ramfb 像素并通过串口转发输入。HVF/TCG 原型已测试计算器、笔记及短帧
+EINVAL 拒绝。这不是 Apple SpringBoard、IOSurface、GPU 或实体手机驱动验证。

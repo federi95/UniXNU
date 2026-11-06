@@ -1,0 +1,63 @@
+--- a/bsd/kern/kern_sysctl.c
++++ b/bsd/kern/kern_sysctl.c
+@@ -6135,3 +6135,60 @@
+ SYSCTL_UINT(_kern, OID_AUTO, exclaves_debug, CTLFLAG_RW | CTLFLAG_LOCKED,
+     &exclaves_debug, 0, "Exclaves debug flags");
+ #endif /* CONFIG_EXCLAVES && (DEVELOPMENT || DEBUG) */
++
++#if XNU_OPEN_SOURCE_GUI
++/* Isolated public ArmVirt demo: bounded firmware scanout, no device/MMIO ABI. */
++/* Exact declaration from pinned osfmk/arm/machine_routines.h. */
++extern vm_offset_t ml_io_map_wcomb(vm_offset_t phys_addr, vm_size_t size);
++static vm_offset_t open_gui_mapping;
++static unsigned long open_gui_frames;
++static int
++sysctl_open_darwin_fb(__unused struct sysctl_oid *oidp, __unused void *arg1,
++    __unused int arg2, struct sysctl_req *req)
++{
++    unsigned int enabled = 0;
++    PE_Video video;
++    uint64_t bytes;
++    uint32_t mode[4];
++    int error;
++    if (!kauth_cred_issuser(kauth_cred_get()) || proc_selfpid() != 1) {
++        return EPERM;
++    }
++    if (!PE_parse_boot_argn("open-gui", &enabled, sizeof(enabled)) || enabled != 1 ||
++        PE_current_console(&video) || !video.v_baseAddr || video.v_depth != 32 ||
++        video.v_rotate || !video.v_width || !video.v_height ||
++        video.v_width > 2048 || video.v_height > 1536 ||
++        video.v_rowBytes < video.v_width * 4 || video.v_rowBytes > 8192 ||
++        (video.v_rowBytes & 3)) {
++        return ENXIO;
++    }
++    bytes = (uint64_t)video.v_rowBytes * video.v_height;
++    if (video.v_baseAddr > UINT64_MAX - bytes) {
++        return EINVAL;
++    }
++    if (req->newptr) {
++        if (req->newlen != bytes) {
++            return EINVAL;
++        }
++        if (!open_gui_mapping) {
++            open_gui_mapping = ml_io_map_wcomb(video.v_baseAddr, (vm_size_t)bytes);
++            if (!open_gui_mapping) {
++                return ENOMEM;
++            }
++        }
++        error = SYSCTL_IN(req, (void *)open_gui_mapping, (size_t)bytes);
++        if (error) {
++            return error;
++        }
++        __asm__ volatile("dsb sy" ::: "memory");
++        open_gui_frames++;
++    }
++    mode[0] = 1;
++    mode[1] = (uint32_t)video.v_width;
++    mode[2] = (uint32_t)video.v_height;
++    mode[3] = (uint32_t)video.v_rowBytes;
++    return SYSCTL_OUT(req, mode, sizeof(mode));
++}
++SYSCTL_PROC(_kern, OID_AUTO, open_darwin_fb, CTLTYPE_OPAQUE | CTLFLAG_RW,
++    0, 0, sysctl_open_darwin_fb, "S", "Public demo PID 1 bounded firmware scanout");
++#endif /* XNU_OPEN_SOURCE_GUI */
