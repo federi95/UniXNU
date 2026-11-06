@@ -142,3 +142,22 @@ and exports bounded counters plus owner pointers before/after. It executes
 cases. `unixnu_crypto_fixture_bad_expected=1` deliberately changes one expected
 digest and must panic after recording one failure. No original component, keys
 or entropy state is read, and no provider/OS/hardware compatibility is implied.
+
+## Separate public Darwin console
+
+`XNU_OPEN_SOURCE_DEMO=1` is a separate ArmVirt/MockFS source-owner profile,
+with the original-security runtime disabled. Apply the opt-in
+`source-open-demo-entitlements.patch` after the ordinary source patch series.
+It permits an empty entitlement-query context for a plain ad-hoc image when
+AMFI is absent, refuses raw entitlement-bearing/platform/non-ad-hoc images
+before signature reconstitution, and answers entitlement queries with false
+or NULL when no provider exists. It installs no fake provider. Code-signing
+structure/page checks remain active; process-wide code integrity is enabled.
+The source crypto POST is unchanged. This does not qualify Image4 or iOS.
+
+The existing PL011 backend is selected only for this profile. The independent
+ADT option `--pl011-console` exposes virt UART0 at 0x09000000/0x1000 through
+the existing arm-io range. It requires `--armvirt`. Default fixtures omit it;
+TCG and HVF keep distinct timebases. A source-built PID 1 must align the initial
+exec stack before calling C; the raw exec stack can be only 8-byte aligned.
+No phone addresses, firmware or Apple device identity are used.

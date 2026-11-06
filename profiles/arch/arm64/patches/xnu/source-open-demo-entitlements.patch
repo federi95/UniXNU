@@ -1,0 +1,96 @@
+--- a/bsd/kern/kern_cs.c
++++ b/bsd/kern/kern_cs.c
+@@ -91,7 +91,7 @@
+ unsigned int cs_debug_unsigned_exec_failures = 0;
+ unsigned int cs_debug_unsigned_mmap_failures = 0;
+ 
+-#if CONFIG_ENFORCE_SIGNED_CODE
++#if CONFIG_ENFORCE_SIGNED_CODE || XNU_OPEN_SOURCE_DEMO
+ #define DEFAULT_CS_SYSTEM_ENFORCEMENT_ENABLE 1
+ #define DEFAULT_CS_PROCESS_ENFORCEMENT_ENABLE 1
+ #else
+--- a/bsd/kern/ubc_subr.c
++++ b/bsd/kern/ubc_subr.c
+@@ -4060,6 +4060,16 @@
+ 		 * succeed if csblob validation failed, so bail */
+ 		goto out;
+ 	} else {
++#if XNU_OPEN_SOURCE_DEMO
++		/* Check raw blobs before signature reconstitution can discard them. */
++		if (amfi == NULL && (entitlements || der_entitlements ||
++		    !(ntohl(cd->flags) & CS_ADHOC) ||
++		    (ntohl(cd->flags) & CS_PLATFORM_BINARY))) {
++			printf("open-source demo: refusing entitlement-bearing or non-ad-hoc image\n");
++			error = EPERM;
++			goto out;
++		}
++#endif
+ 		const unsigned char *md_base;
+ 		uint8_t hash[CS_HASH_MAX_SIZE];
+ 		int md_size;
+@@ -4368,6 +4378,24 @@
+ 	struct cs_blob *cs_blob)
+ {
+ 	kern_return_t ret = KERN_NOT_SUPPORTED;
++#if XNU_OPEN_SOURCE_DEMO
++	/*
++	 * Separate public-source MockFS demo: no AMFI provider is installed.
++	 * A plain ad-hoc image has no entitlement query context to accelerate.
++	 * Refuse entitlement-bearing and platform/non-ad-hoc images; never
++	 * manufacture an entitlement object or an authentication result.
++	 * Existing CodeDirectory structure and page-hash checks stay intact.
++	 */
++	if (amfi == NULL) {
++		if (!(cs_blob->csb_flags & CS_ADHOC) ||
++		    (cs_blob->csb_flags & CS_PLATFORM_BINARY) ||
++		    cs_blob->csb_entitlements || cs_blob->csb_entitlements_blob ||
++		    cs_blob->csb_der_entitlements_blob) {
++			return EPERM;
++		}
++		return 0;
++	}
++#endif
+ 
+ #if CODE_SIGNING_MONITOR
+ 	CEQueryContext_t ce_ctx = NULL;
+--- a/iokit/bsddev/IOKitBSDInit.cpp
++++ b/iokit/bsddev/IOKitBSDInit.cpp
+@@ -1570,7 +1570,11 @@
+ 	}
+ 
+ 	/* Validate input arguments */
+-	if (task == kernel_task || entitlement == NULL || value == NULL) {
++	if (task == kernel_task || entitlement == NULL || value == NULL
++#if XNU_OPEN_SOURCE_DEMO
++	    || amfi == NULL
++#endif
++	    ) {
+ 		return false;
+ 	}
+ 	proc_t proc = (proc_t)get_bsdtask_info(task);
+@@ -1601,7 +1605,11 @@
+ 	}
+ 
+ 	/* Validate input arguments */
+-	if (task == kernel_task || entitlement == NULL) {
++	if (task == kernel_task || entitlement == NULL
++#if XNU_OPEN_SOURCE_DEMO
++	    || amfi == NULL
++#endif
++	    ) {
+ 		return false;
+ 	}
+ 	proc_t proc = (proc_t)get_bsdtask_info(task);
+@@ -1634,7 +1642,11 @@
+ 	}
+ 
+ 	/* Validate input arguments */
+-	if (task == kernel_task || entitlement == NULL) {
++	if (task == kernel_task || entitlement == NULL
++#if XNU_OPEN_SOURCE_DEMO
++	    || amfi == NULL
++#endif
++	    ) {
+ 		return NULL;
+ 	}
+ 	proc_t proc = (proc_t)get_bsdtask_info(task);

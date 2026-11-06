@@ -140,3 +140,16 @@ python3 scripts/qemu-entry/gdb-stop.py --help
 现有内核入口）和 120 个 DER 测试。`unixnu_crypto_fixture_bad_expected=1`
 故意改变一个预期摘要，记录一次失败后必须 panic。不会执行原始固件组件、
 读取密钥或熵状态，也不代表操作系统或物理驱动兼容性验证。
+
+## 独立的公开 Darwin 控制台
+
+`XNU_OPEN_SOURCE_DEMO=1` 是独立的 ArmVirt/MockFS 源码配置，不启用原始安全运行时。
+在普通源码补丁后应用 `source-open-demo-entitlements.patch`。AMFI 不存在时，仅接受
+没有 entitlement 的普通 ad-hoc 镜像空查询上下文；在签名重构前拒绝携带 entitlement、
+平台或非 ad-hoc 镜像。无提供者的 entitlement 查询返回 false/NULL，不伪造安全提供者。
+保留签名结构和页面校验，并启用进程代码完整性检查；源码 crypto POST 保持不变。
+这不代表 Image4、iOS 或手机启动验证。
+
+此配置复用现有 PL011 后端。`--pl011-console` 仅适用于 `--armvirt`，通过 arm-io
+范围描述 QEMU UART0（0x09000000/0x1000）；默认 ADT 不变，TCG/HVF 时基仍分开。
+静态 PID 1 在进入 C 前必须将 exec 初始栈对齐到 16 字节。没有使用手机硬件地址或固件。

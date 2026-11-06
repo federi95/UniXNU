@@ -28,6 +28,7 @@ parser.add_argument('--armvirt', action='store_true', help='Describe actual QEMU
 parser.add_argument('--platform-compatible', choices=['linux,dummy-virt', 'unmatched-test-platform', 'xiaomi,sheng'], default='linux,dummy-virt')
 parser.add_argument('--smp', type=int, default=1, help='Number of QEMU CPUs; Affinity0 numbers them, PSCI conduit is hvc (virt without EL2)')
 parser.add_argument('--armcpu', action='store_true', help='Add the real QEMU GICv3 distributor/redistributor DT resources')
+parser.add_argument('--pl011-console', action='store_true', help='Expose QEMU virt UART0 for the existing polling PL011 backend')
 parser.add_argument('--no-ufs-test-nodes', action='store_true', help='Omit synthetic SM8550 UFS test nodes for a pure QEMU virt ADT')
 parser.add_argument('--data-ramdisk', action='store_true', help='Provide a writable scratch RAMDisk sidecar while keeping actual disk root matching')
 parser.add_argument('--ramdisk', action='store_true', help='Provide an owned memory-disk binding placeholder for the loader')
@@ -40,6 +41,8 @@ parser.add_argument('--trust-cache', action='store_true', help='Provide a zeroed
 parser.add_argument('--virtio-mmio-fdt', type=Path, help='Describe actual VirtIO resource windows from a QEMU-generated FDT')
 parser.add_argument('--root-match-volume-uuid', type=uuid.UUID, help='Match an actual IOMedia UUID through the source root-matching mechanism')
 args = parser.parse_args()
+if args.pl011_console and not args.armvirt:
+    parser.error('--pl011-console requires the separate QEMU virt platform')
 if args.owned_memory_size is not None and (not 0x10000000 <= args.owned_memory_size <= 0x100000000 or args.owned_memory_size % 0x200000):
     parser.error('Owned memory must be 256 MiB to 4 GiB, aligned to 2 MiB')
 timebase = 62500000
@@ -131,7 +134,10 @@ tree = node('device-tree', [('model', b'qemu-entry-fixture\0'),
                           ('reg', struct.pack('<2Q', 0x03ff0000, 0x3000))]),
            node('ufsphy', [('compatible', b'qcom,sm8550-qmp-ufs-phy\0'),
                            ('reg', struct.pack('<2Q', 0x03fe0000, 0x2000))])]
-         if args.armvirt and not args.no_ufs_test_nodes else []) + virtio_nodes)])
+         if args.armvirt and not args.no_ufs_test_nodes else []) +
+         ([node('uart0', [('compatible', b'arm,pl011\0'),
+                         ('reg', struct.pack('<QQ', 0x01000000, 0x1000))])]
+          if args.pl011_console else []) + virtio_nodes)])
 output = args.output
 output.parent.mkdir(parents=True, exist_ok=True)
 output.write_bytes(tree)

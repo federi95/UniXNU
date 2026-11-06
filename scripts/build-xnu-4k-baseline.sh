@@ -269,7 +269,30 @@ if [ -d "$MOCKFS_OBJECT_DIR" ]; then
   fi
   printf '%s\n' "$CS_HASH_CACHE_MODE" > "$MOCKFS_OBJECT_DIR/.native-cs-hash-cache-mode"
 fi
-EXTRA_MAKE_ARGS+=("ubc_subr.o_CFLAGS_ADD=-DXNU_NATIVE_CS_HASH_CACHE=$CS_HASH_CACHE_MODE")
+OPEN_SOURCE_DEMO=${XNU_OPEN_SOURCE_DEMO:-0}
+if [ "$OPEN_SOURCE_DEMO" != 0 ] && [ "$OPEN_SOURCE_DEMO" != 1 ]; then
+  echo 'XNU_OPEN_SOURCE_DEMO must be 0 or 1' >&2; exit 1
+fi
+if [ "$OPEN_SOURCE_DEMO" = 1 ]; then
+  if [ "$MOCKFS_MODE" != 1 ] || [ "$TRUST_CACHE_MODE" != 0 ] || [ "${XNU_ARMVIRT_PLATFORM:-0}" != 1 ] || [ "${XNU_SOURCE_CORECRYPTO14:-0}" != 1 ] || [ "$CRYPTO_BOOTSTRAP_MODE" != source ]; then
+    echo 'Open source demo requires separate ArmVirt/MockFS source-owner configuration, without original security runtime' >&2; exit 1
+  fi
+  EXTRA_MAKE_ARGS+=("pe_serial.o_CFLAGS_ADD=-DVMAPPLE_UART=1")
+fi
+python3 - "$OPEN_SOURCE_DEMO" <<'PY_DEMO_MODE'
+from pathlib import Path
+import sys
+root = Path('build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837')
+stamp = root / '.open-source-demo-mode'
+mode = sys.argv[1]
+if not stamp.exists() or stamp.read_text() != mode:
+    for name in ('bsd/DEVELOPMENT/ubc_subr.o', 'bsd/DEVELOPMENT/kern_cs.o', 'iokit/DEVELOPMENT/IOKitBSDInit.cpo', 'pexpert/DEVELOPMENT/pe_serial.o', 'mach.development.bcm2837.unstripped'):
+        (root / name).unlink(missing_ok=True)
+    root.mkdir(parents=True, exist_ok=True)
+    stamp.write_text(mode)
+PY_DEMO_MODE
+EXTRA_MAKE_ARGS+=("ubc_subr.o_CFLAGS_ADD=-DXNU_NATIVE_CS_HASH_CACHE=$CS_HASH_CACHE_MODE -DXNU_OPEN_SOURCE_DEMO=$OPEN_SOURCE_DEMO")
+EXTRA_MAKE_ARGS+=("kern_cs.o_CFLAGS_ADD=-DXNU_OPEN_SOURCE_DEMO=$OPEN_SOURCE_DEMO")
 EXTRA_CFLAGS=${XNU_EXTRA_CFLAGS:--Wno-reserved-identifier -Wno-pre-c11-compat -Wno-missing-designated-field-initializers -Wno-suggest-override -Wno-unnecessary-virtual-specifier -Wno-suggest-destructor-override -Wno-ms-bitfield-padding}
 OWNER_ROOT_PROBE=${XNU_VERIFIED_ROOT_PROBE:-0}
 if [ "$OWNER_ROOT_PROBE" != 0 ] && [ "$OWNER_ROOT_PROBE" != 1 ]; then
@@ -408,7 +431,7 @@ if [ "$OWNER_BOOT_MANIFEST" = 1 ] && [ "$OWNER_CACHE_STARTUP" != 1 ]; then
   echo 'Owner boot metadata requires real authenticated owner root/cache startup' >&2
   exit 1
 fi
-EXTRA_MAKE_ARGS+=("IOKitBSDInit.cpo_CFLAGS_ADD=-DXNU_OWNER_BOOT_MANIFEST=$OWNER_BOOT_MANIFEST")
+EXTRA_MAKE_ARGS+=("IOKitBSDInit.cpo_CFLAGS_ADD=-DXNU_OWNER_BOOT_MANIFEST=$OWNER_BOOT_MANIFEST -DXNU_OPEN_SOURCE_DEMO=$OPEN_SOURCE_DEMO")
 OWNER_MANIFEST_STAMP=$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/.owner-boot-manifest-mode
 if [ "$(cat "$OWNER_MANIFEST_STAMP" 2>/dev/null || echo 0)" != "$OWNER_BOOT_MANIFEST" ]; then
   rm -f "$ROOT/build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/iokit/DEVELOPMENT/IOKitBSDInit.cpo"
